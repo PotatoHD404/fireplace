@@ -8,3 +8,5 @@ fireplace.egg-info
 .env
 .coverage
 .idea
+
+.DS_Store
