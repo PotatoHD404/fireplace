@@ -1,7 +1,6 @@
 import utils
 from hearthstone.enums import CardType, GameTag, Rarity
 
-
 CARDS = utils.fireplace.cards.db
 
 
@@ -30,18 +29,18 @@ CARDS = utils.fireplace.cards.db
 
 
 def test_play_scripts():
-	for card in CARDS.values():
-		if card.scripts.activate:
-			assert card.type == CardType.HERO_POWER
-		elif card.scripts.play:
-			assert card.type not in (CardType.HERO, CardType.HERO_POWER, CardType.ENCHANTMENT)
+    for card in CARDS.values():
+        if card.scripts.activate:
+            assert card.type == CardType.HERO_POWER
+        elif card.scripts.play:
+            assert card.type not in (CardType.HERO, CardType.HERO_POWER, CardType.ENCHANTMENT)
 
 
 def test_card_docstrings():
-	for card in CARDS.values():
-		c = utils.fireplace.utils.get_script_definition(card.id)
-		name = c.__doc__
-		if name is not None:
-			if name.endswith(")"):
-				continue
-			assert name == card.name
+    for card in CARDS.values():
+        c = utils.fireplace.utils.get_script_definition(card.id)
+        name = c.__doc__
+        if name is not None:
+            if name.endswith(")"):
+                continue
+            assert name == card.name
