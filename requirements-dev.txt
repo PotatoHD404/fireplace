@@ -1,3 +1,7 @@
-hearthstone~=5.40.4
-pytest~=6.2.4
-setuptools~=57.2.0
+setuptools
+hearthstone
+pytest
+pytest-cov
+pytest-benchmark
+flake8
+aspectlib

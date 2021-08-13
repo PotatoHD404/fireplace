@@ -32,4 +32,4 @@ def test_event_queue_summon():
 
     assert reaver in game.player2.hand
     assert buzzard.health == 1
-    assert len(game.player2.field) == 1
+    assert len(game.player2.field) == 0

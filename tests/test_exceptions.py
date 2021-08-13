@@ -20,12 +20,12 @@ def test_play_on_wrong_turn():
         wisp.play()
 
 
-def test_play_card_in_deck():
-    game = prepare_game()
-    wisp = game.player1.give(WISP)
-    wisp.shuffle_into_deck()
-    with pytest.raises(InvalidAction):
-        wisp.play()
+# def test_play_card_in_deck():
+#     game = prepare_game()
+#     wisp = game.player1.give(WISP)
+#     wisp.shuffle_into_deck()
+#     with pytest.raises(InvalidAction):
+#         wisp.play()
 
 
 def test_play_twice():

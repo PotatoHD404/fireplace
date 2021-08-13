@@ -273,9 +273,9 @@ def test_forlorn_stalker():
     stalker = game.player1.give("OG_292")
     stalker.play()
     assert leper.buffs
-    assert leper.atk == leper.health == 1 + 1
+    assert leper.atk == leper.health + 1 == 1 + 2
     assert not leper2.buffs
-    assert leper2.atk == leper2.health == 1
+    assert leper2.atk == leper2.health + 1 == 2
     assert not deathsbite.buffs
     assert deathsbite.atk == 4
     assert deathsbite.durability == 2

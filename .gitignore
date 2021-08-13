@@ -10,3 +10,8 @@ fireplace.egg-info
 .idea
 
 .DS_Store
+
+fireplace2.egg-info/
+build/
+/.pytest_cache/
+/.venv/
