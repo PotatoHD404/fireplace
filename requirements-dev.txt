@@ -5,3 +5,4 @@ pytest-cov
 pytest-benchmark
 flake8
 aspectlib
+pytest-repeat
