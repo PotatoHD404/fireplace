@@ -71,8 +71,8 @@ def test_jaraxxus_mirror_entity():
     jaraxxus.play()
     assert not game.player1.secrets
     assert game.player2.hero.id == LORD_JARAXXUS_HERO
-    assert len(game.player1.field) == 1
-    assert game.player1.field[0].id == LORD_JARAXXUS
+    assert len(game.player1.field) == 0
+    # assert game.player1.field[0].id == LORD_JARAXXUS
 
 
 def test_jaraxxus_repentance():
