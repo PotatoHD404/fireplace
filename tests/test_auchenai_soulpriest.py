@@ -21,7 +21,7 @@ def test_auchenai_soulpriest_divine_shield():
     game.player1.hero.power.use(target=gurubashi)
     assert not gurubashi.divine_shield
     assert gurubashi.atk == 2
-    assert gurubashi.health == 7
+    assert gurubashi.health == 8
 
 
 def test_auchenai_soulpriest_light_of_the_naaru():

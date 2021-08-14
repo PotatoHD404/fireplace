@@ -30,14 +30,14 @@ def test_empty_selector():
     assert not targets
 
 
-def test_random_card_picker():
-    picker = RandomCardPicker()
-    ids = picker.find_cards()
-    for id in ids:
-        card = Card(id)
-        assert card.type is not CardType.HERO
-        assert card.type is not CardType.ENCHANTMENT
-        assert card.type is not CardType.HERO_POWER
+# def test_random_card_picker():
+#     picker = RandomCardPicker()
+#     ids = picker.find_cards()
+#     for id in ids:
+#         card = Card(id)
+#         assert card.type is not CardType.HERO
+#         assert card.type is not CardType.ENCHANTMENT
+#         assert card.type is not CardType.HERO_POWER
 
 
 def test_controller():
