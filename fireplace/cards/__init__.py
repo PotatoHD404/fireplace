@@ -1,7 +1,7 @@
 import os
 from pkg_resources import resource_filename
 from hearthstone import cardxml
-from hearthstone.enums import CardType
+from hearthstone.enums import CardType,CardSet
 from ..logging import log
 from ..utils import get_script_definition
 
@@ -90,16 +90,60 @@ class CardDB(dict):
 		else:
 			card.dormant = 0
 
+
 		return card
 
-	def initialize(self, locale="enUS"):
+	def initialize(self, locale="jaJP"):
 		log.info("Initializing card database")
 		self.initialized = True
 		db, xml = cardxml.load(locale=locale)
+		exclude = [
+			# bug cards
+			'SCH_199',## neutral-scholo, this card morphs w.r.t. the background when playing
+			'SCH_259',## neutral-scholo, while this weapon is played, each turn begin allows me to compare the drawn card and other cards.
+			'YOD_009',## this is a hero in galakrond
+			'DRG_050','DRG_242','DRG_099',## neutral-dragon/45 These are invoking cards for galakrond
+			'ULD_178',## neutral-uldum, this card allows us to add 2 of 4 enchantments when we use.
+			'DAL_800', ## change all cards in the friendly deck, and it might occur some troubles. 
+			# no implementation
+			#'BT_730',
+			]
+		nameList=[]
+		#print("idList=[")
 		for id, card in db.items():
-			self[id] = self.merge(id, card)
+			#if card.name in nameList:
+			#	print("'%s',"%(card.id))
+			from hearthstone.enums import GameTag
+			## add attr spellpower
+			spellpowervalue = card.tags.get(GameTag.SPELLPOWER)
+			if spellpowervalue is not None:
+				setattr(card, 'spellpower', spellpowervalue)
+			else:
+				setattr(card, 'spellpower', 0)
+			yes = False
+			#if card.card_set == CardSet.STORMWIND: # 1578:
+			#	if 'SW_' in card.id:
+			#		yes = True					
+			#if card.card_set == CardSet.THE_BARRENS:#1525
+			#	if 'BAR_' in card.id or 'WC_' in card.id:
+			#		yes = True					
+			if card.card_set == CardSet.DARKMOON_FAIRE:#1466
+				if 'DMF_' in card.id or 'YOP_' in card.id:
+					yes = True
 
+			elif card.card_set in [2,3,4,12,17,18,1004,1130,1158,1347,1403,1414,1443,1635, CardSet.CORE]:
+				if (not 'LOOT_' in card.id) and (not 'CORE_' in card.id) and (not card.id in exclude):
+					yes = True
+			elif card.id in ['OG_280']:#C'Thun
+				yes = True
+			if card.card_set == 15:
+				if card.id in ['AT_132_DRUIDe',"AT_132_SHAMANa", "AT_132_SHAMANb", "AT_132_SHAMANc", "AT_132_SHAMANd","AT_132_ROGUEt",]:## cardset 15
+					yes = True
+			if yes:
+				self[id] = self.merge(id, card)
+			## end ###
 		log.info("Merged %i cards", len(self))
+
 
 	def filter(self, **kwargs):
 		"""
