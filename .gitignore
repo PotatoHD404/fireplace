@@ -5,6 +5,7 @@ fireplace.egg-info
 *.pyc
 .tox
 .vscode
+.idea
 .env
 .coverage
 
@@ -17,3 +18,5 @@ build/
 /.idea/
 /.benchmarks/
 /local/
+
+._*
