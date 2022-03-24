@@ -1,6 +1,7 @@
 from .actions import *
 from .dsl.selector import *
 
+
 OWN_CARD_PLAY = Play(CONTROLLER)
 OWN_MINION_PLAY = Play(CONTROLLER, MINION)
 OWN_SECRET_PLAY = Play(CONTROLLER, SECRET)

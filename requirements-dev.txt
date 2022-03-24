@@ -1,8 +1,10 @@
-setuptools
-hearthstone
-pytest
+setuptools~=57.2.0
+hearthstone~=5.40.4
+pytest~=6.2.4
 pytest-cov
 pytest-benchmark
 flake8
 aspectlib
 pytest-repeat
+
+hslog~=1.15.4
