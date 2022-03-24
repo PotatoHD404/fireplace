@@ -5,6 +5,7 @@ from importlib import import_module
 from pkgutil import iter_modules
 from typing import List
 from xml.etree import ElementTree
+from enum import IntEnum
 
 from hearthstone.enums import CardClass, CardType
 
@@ -12,7 +13,6 @@ from hearthstone.enums import CardClass, CardType
 # Autogenerate the list of cardset modules
 _cards_module = os.path.join(os.path.dirname(__file__), "cards")
 CARD_SETS = [cs for _, cs, ispkg in iter_modules([_cards_module]) if ispkg]
-
 
 class CardList(list):
 	def __contains__(self, x):
@@ -160,6 +160,8 @@ def weighted_card_choice(source, weights: List[int], card_sets: List[str], count
 		chosen_set = bisect(cum_weights, random.random() * totalweight)
 
 		# choose a random card from that set
+		if chosen_set>= len(card_sets):
+			continue
 		chosen_card_index = random.randint(0, len(card_sets[chosen_set]) - 1)
 
 		chosen_cards.append(card_sets[chosen_set].pop(chosen_card_index))
@@ -238,3 +240,27 @@ def play_full_game():
 		play_turn(game)
 
 	return game
+
+
+class ActionType(IntEnum):
+	ATTACK=1
+	PLAY=7
+	POWER=3
+	PASS=4
+	TRADE=14
+
+
+	def __str__(self):
+		if self==1:
+			return "ATTACK"
+		if self==7:
+			return "PLAY"
+		if self==3:
+			return "PASS"
+		if self==14:
+			return "TRADE"
+		else:
+			return ""
+
+
+

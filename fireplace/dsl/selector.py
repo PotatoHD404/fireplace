@@ -229,9 +229,19 @@ class SetOpSelector(Selector):
 			self._entity_id_set(right_children)
 		)
 		# Preserve input ordering and multiplicity
-		return [
-			e for e in entities if hasattr(e, "entity_id") and
-			e.entity_id in result_entity_ids]
+		#return [
+		#	e for e in entities if hasattr(e, "entity_id") and
+		#	e.entity_id in result_entity_ids]
+		ret = []
+		ret_id = []
+		for e in entities:
+			if e.game != entities[0].game:
+				i=0
+			if hasattr(e, "entity_id") and e.entity_id in result_entity_ids and not e.entity_id in ret_id:
+				ret.append(e)
+				ret_id.append(e.entity_id)
+		return ret
+
 
 	def __repr__(self):
 		name = self.op.__name__
@@ -250,6 +260,9 @@ class SetOpSelector(Selector):
 SELF = FuncSelector(lambda _, source: [source])
 OWNER = FuncSelector(
 	lambda entities, source: [source.owner] if hasattr(source, "owner") else []
+)
+OWNER_TARGET = FuncSelector(
+	lambda entities, source: [source.owner.target] if hasattr(source, "owner") else []
 )
 
 
@@ -283,7 +296,7 @@ class BoardPositionSelector(Selector):
 	def eval(self, entities, source):
 		result = []
 		for e in self.child.eval(entities, source):
-			if getattr(e, "zone", None) == Zone.PLAY:
+			if e.type==CardType.MINION and getattr(e, "zone", None) == Zone.PLAY:
 				field = e.controller.field
 				position = e.zone_position - 1
 				if self.direction == self.Direction.RIGHT:
@@ -355,7 +368,7 @@ class Controller(LazyValue):
 			# This allows us to skip selector evaluation altogether.
 			return self._get_entity_attr(source)
 		else:
-			entities = self.child.eval(source.game, source)
+			entities = self.child.eval(source.game.entities, source)
 		assert len(entities) == 1
 		return self._get_entity_attr(entities[0])
 
@@ -395,8 +408,15 @@ Zone.test = lambda self, entity, *args: (
 CardClass.test = lambda self, entity, *args: (
 	entity is not None and self == getattr(entity, "card_class", CardClass.INVALID)
 )
-SpellSchool.test = lambda self, entity, *args: (# add in 19 aug 2021
+SpellSchool.test = lambda self, entity, *args: (# 
 	entity is not None and self == getattr(entity, "spell_school", SpellSchool.NONE)
+)
+class Alive(IntEnum):
+	INVALID=0
+	ALIVE=1
+	pass
+Alive.test = lambda self, entity, *arges: (
+	entity is not None and hasattr(entity,'health') and entity.health>0
 )
 
 BATTLECRY = EnumSelector(GameTag.BATTLECRY)
@@ -406,21 +426,36 @@ DEATHRATTLE = EnumSelector(GameTag.DEATHRATTLE)
 DIVINE_SHIELD = EnumSelector(GameTag.DIVINE_SHIELD)
 FROZEN = EnumSelector(GameTag.FROZEN)
 OVERLOAD = EnumSelector(GameTag.OVERLOAD)
+RUSH = EnumSelector(GameTag.RUSH)
 SPELLPOWER = EnumSelector(GameTag.SPELLPOWER)
 STEALTH = EnumSelector(GameTag.STEALTH)
 TAUNT = EnumSelector(GameTag.TAUNT)
 WINDFURY = EnumSelector(GameTag.WINDFURY)
 CLASS_CARD = EnumSelector(GameTag.CLASS)
 DORMANT = EnumSelector(GameTag.DORMANT)
+FRENZY = EnumSelector(GameTag.FRENZY)
+CHOOSE_ONE = EnumSelector(GameTag.CHOOSE_ONE)
+OUTCAST = EnumSelector(GameTag.OUTCAST)
 
 ALWAYS_WINS_BRAWLS = AttrValue(enums.ALWAYS_WINS_BRAWLS) == True  # noqa
 KILLED_THIS_TURN = AttrValue(enums.KILLED_THIS_TURN) == True  # noqa
 CAST_ON_FRIENDLY_CHARACTERS = AttrValue(enums.CAST_ON_FRIENDLY_CHARACTERS) == True  # noqa
 
+DRUID = EnumSelector(CardClass.DRUID)
+HUNTER = EnumSelector(CardClass.HUNTER)
+MAGE = EnumSelector(CardClass.MAGE)
+PALADIN = EnumSelector(CardClass.PALADIN)
+PRIEST = EnumSelector(CardClass.PRIEST)
 ROGUE = EnumSelector(CardClass.ROGUE)
+SHAMAN = EnumSelector(CardClass.SHAMAN)
 WARLOCK = EnumSelector(CardClass.WARLOCK)
+WARRIOR = EnumSelector(CardClass.WARRIOR)
+DREAM = EnumSelector(CardClass.DREAM)
+NEUTRAL = EnumSelector(CardClass.NEUTRAL)
+DEMONHUNTER = EnumSelector(CardClass.DEMONHUNTER)
 
 IN_PLAY = EnumSelector(Zone.PLAY)
+ALIVE=EnumSelector(Alive.ALIVE)+IN_PLAY
 IN_DECK = EnumSelector(Zone.DECK)
 IN_HAND = EnumSelector(Zone.HAND)
 HIDDEN = EnumSelector(Zone.SECRET)
@@ -436,17 +471,24 @@ SPELL = EnumSelector(CardType.SPELL)
 SECRET = EnumSelector(GameTag.SECRET)
 HERO_POWER = EnumSelector(CardType.HERO_POWER)
 
-BEAST = EnumSelector(Race.BEAST)
-DEMON = EnumSelector(Race.DEMON)
-DRAGON = EnumSelector(Race.DRAGON)
-MECH = EnumSelector(Race.MECHANICAL)
-MURLOC = EnumSelector(Race.MURLOC)
-PIRATE = EnumSelector(Race.PIRATE)
-TOTEM = EnumSelector(Race.TOTEM)
-ELEMENTAL = EnumSelector(Race.ELEMENTAL)
+ALL = EnumSelector(Race.ALL)
+
+BEAST = EnumSelector(Race.BEAST) | ALL
+DEMON = EnumSelector(Race.DEMON) | ALL
+DRAGON = EnumSelector(Race.DRAGON) | ALL
+MECH = EnumSelector(Race.MECHANICAL) | ALL
+MURLOC = EnumSelector(Race.MURLOC) | ALL
+PIRATE = EnumSelector(Race.PIRATE) | ALL
+TOTEM = EnumSelector(Race.TOTEM) | ALL
+ELEMENTAL = EnumSelector(Race.ELEMENTAL) | ALL
+QUILBOAR = EnumSelector(Race.QUILBOAR) | ALL
 
 NATURE = EnumSelector(SpellSchool.NATURE)
 HOLY = EnumSelector(SpellSchool.HOLY)
+FIRE = EnumSelector(SpellSchool.FIRE)
+FROST = EnumSelector(SpellSchool.FROST)
+ARCANE = EnumSelector(SpellSchool.ARCANE)
+FEL = EnumSelector(SpellSchool.FEL)
 
 COMMON = EnumSelector(Rarity.COMMON)
 RARE = EnumSelector(Rarity.RARE)
@@ -455,7 +497,7 @@ LEGENDARY = EnumSelector(Rarity.LEGENDARY)
 
 ALL_PLAYERS = IN_PLAY + PLAYER
 ALL_HEROES = IN_PLAY + HERO
-ALL_MINIONS = IN_PLAY + MINION - DORMANT
+ALL_MINIONS = ALIVE + MINION - DORMANT
 ALL_CHARACTERS = IN_PLAY + CHARACTER - DORMANT
 ALL_WEAPONS = IN_PLAY + WEAPON
 ALL_SECRETS = HIDDEN + SECRET
@@ -476,6 +518,7 @@ FRIENDLY_CHARACTERS = ALL_CHARACTERS + FRIENDLY
 FRIENDLY_WEAPON = ALL_WEAPONS + FRIENDLY
 FRIENDLY_SECRETS = ALL_SECRETS + FRIENDLY
 FRIENDLY_HERO_POWER = ALL_HERO_POWERS + FRIENDLY
+FRIENDLY_KILLED = KILLED + FRIENDLY
 
 ENEMY_HAND = IN_HAND + ENEMY
 ENEMY_DECK = IN_DECK + ENEMY

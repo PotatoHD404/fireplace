@@ -12,6 +12,17 @@ from .managers import PlayerManager
 from .utils import CardList
 from .config import Config #by AharaLab
 
+class PlayLog:
+	card=None
+	turn=0
+	amount=0
+	def __init__(self, _card, _turn, _amount=0):
+		self.card = _card
+		self.turn = _turn
+		self.amount = _amount
+		pass
+	pass
+
 class Player(Entity, TargetableByAuras):
 	Manager = PlayerManager
 	all_targets_random = slot_property("all_targets_random")
@@ -43,6 +54,7 @@ class Player(Entity, TargetableByAuras):
 		self.graveyard = CardList()
 		self.secrets = CardList()
 		self.choice = None
+		self.choiceText = 'Choose one.'
 		self.max_hand_size = 10
 		self.max_resources = 10
 		self.max_deck_size = 60
@@ -66,11 +78,26 @@ class Player(Entity, TargetableByAuras):
 		self.jade_golem = 1
 		self.times_spell_played_this_game = 0
 		self.times_secret_played_this_game = 0
-		self.times_spell_to_friendly_minion_this_game = 0 ##### aharalab ####### 24.12.2020 ####
-		self.times_card_to_play_out_of_deck = 0 ##### aharalab ####DRG_109### 25.12.2020 ####
-		self.times_spells_played_this_turn = 0 ##### aharalab ####DAL_603### 27.12.2020 ####
-		self.spells_played_this_turn=[] ##### aharalab ####DAL_558### 28.12.2020 ####
-		self.cthun = None
+		self.times_spell_to_friendly_minion_this_game = 0 #
+		self.times_card_to_play_out_of_deck = 0 #
+		self.times_spells_played_this_turn = 0 #
+		self.spells_played_this_turn=[] #
+		self.died_this_turn=[] #
+		#self.cthun = None
+		self.piece_of_cthun = [0,0,0,0]
+		self._death_log=[]
+		self._play_log=[]
+		self._damage_log=[]
+		self._activate_log=[]
+		self._summon_log=[]
+		self._reveal_log=[]
+		self._targetedaction_log=[]
+		self.spell_and_damage=False
+		self.guardians_legacy = False#CS3_001
+		self.spellpower_option=0 # SW_450t4
+		self.choiceStrategy = None
+		self.lost_in_the_park=0
+		self.carry_cards=[] # YOP_024
 
 	def __str__(self):
 		return self.name
@@ -107,9 +134,23 @@ class Player(Entity, TargetableByAuras):
 	@property
 	def spellpower(self):
 		aura_power = self.controller.spellpower_adjustment
-		minion_power = sum(minion.spellpower for minion in self.field)
-		return aura_power + minion_power
+		minion_power = 0
+		for minion in self.field:
+			if hasattr(minion,'spellpower'):
+				if hasattr(minion,'dormant') and minion.dormant>0:
+					continue
+				minion_power += minion.spellpower
+		return aura_power + minion_power + self.spellpower_option
 
+	@property
+	def spellpower_fire(self):# There is a referenced tag in SW_112, but this is the only card for this tag.
+		minion_power = 0
+		for minion in self.field:
+			if hasattr(minion,'spellpower_fire'):
+				if hasattr(minion,'dormant') and minion.dormant>0:
+					continue
+				minion_power += minion.spellpower_fire
+		return minion_power
 	@property
 	def start_hand_size(self):
 		# old version
@@ -162,29 +203,55 @@ class Player(Entity, TargetableByAuras):
 			card.creator = source
 		if parent is not None:
 			card.parent_card = parent
-		if id == "OG_280" and self.controller.cthun is not None:
-			cthun = self.controller.cthun
-			for k in cthun.silenceable_attributes:
-				v = getattr(cthun, k)
-				setattr(card, k, v)
-			card.silenced = cthun.silenced
-			card.damage = cthun.damage
-			for buff in cthun.buffs:
-				cthun.buff(card, buff.id)
+		#if id == "OG_280" and self.controller.cthun is not None:
+		#	cthun = self.controller.cthun
+		#	for k in cthun.silenceable_attributes:
+		#		v = getattr(cthun, k)
+		#		setattr(card, k, v)
+		#	card.silenced = cthun.silenced
+		#	card.damage = cthun.damage
+		#	for buff in cthun.buffs:
+		#s		cthun.buff(card, buff.id)
 		self.game.manager.new_entity(card)
 		return card
+
+	def setup_piece_of_cthun(self):#DMF_254
+		player = self
+		for card in player.deck:
+			if card.id=='DMF_254':
+				card.destroy()
+				self.card('DMF_254t3',zone=Zone.DECK)
+				self.card('DMF_254t4',zone=Zone.DECK)
+				self.card('DMF_254t5',zone=Zone.DECK)
+				self.card('DMF_254t7',zone=Zone.DECK)
+				self.shuffle_deck()
+		pass
+
+	def contains_questline(self, deck):
+		for card in deck:
+			if hasattr(card, 'questline') and card.questline:
+				return card
+		return None
+		
 
 	def prepare_for_game(self):
 		self.summon(self.starting_hero)
 		for id in self.starting_deck:
 			self.card(id, zone=Zone.DECK)
 		self.shuffle_deck()
-		self.cthun = self.card("OG_280")
+		#self.cthun = self.card("OG_280")
 		self.playstate = PlayState.PLAYING
+		self.setup_piece_of_cthun()
 
 		# Draw initial hand (but not any more than what we have in the deck)
 		hand_size = min(len(self.deck), self.start_hand_size)
-		starting_hand = random.sample(self.deck, hand_size)
+		questline_card = self.contains_questline(self.deck)
+		# questline card must be included in the initial hand.
+		if questline_card != None:
+			starting_hand = [questline_card]+random.sample(self.deck, hand_size-1)
+		else:
+			starting_hand = random.sample(self.deck, hand_size)
+
 		# It's faster to move cards directly to the hand instead of drawing
 		for card in starting_hand:
 			card.zone = Zone.HAND
@@ -197,6 +264,16 @@ class Player(Entity, TargetableByAuras):
 		amount += self.spellpower
 		amount <<= self.controller.spellpower_double
 		return amount
+
+	def get_spell_damage_fire(self, amount: int) -> int:
+		"""
+		Returns the amount of damage for only fire card \a amount will do, taking
+		SPELLPOWER and SPELLPOWER_DOUBLE into account.
+		"""
+		amount += (self.spellpower+self.spellpower_fire)
+		amount <<= self.controller.spellpower_double
+		return amount
+
 
 	def discard_hand(self):
 		self.log("%r discards their entire hand!", self)
@@ -236,12 +313,12 @@ class Player(Entity, TargetableByAuras):
 			amount -= used_temp
 			self.temp_mana -= used_temp
 		#self.log("%s pays %i mana", self, amount)
-		self.log("%s pays %i mana to %i", self, amount, (self.used_mana + amount)) ############### aharalab ############
+		self.log("%s pays %i mana to %i", self, amount, (self.used_mana + amount)) #
 		self.used_mana += amount
 		return amount
 
 	def shuffle_deck(self):
-		self.log("%r shuffles their deck", self)
+		self.log("%r shuffles his deck", self)
 		random.shuffle(self.deck)
 
 	def draw(self, count=1):
@@ -274,7 +351,10 @@ class Player(Entity, TargetableByAuras):
 
 	def give(self, id):
 		cards = self.game.cheat_action(self, [Give(self, id)])[0]
-		return cards[0][0]
+		if cards[0] != []:
+			return cards[0][0]
+		else:
+			return None
 
 	def concede(self):
 		ret = self.game.cheat_action(self, [Concede(self)])
@@ -294,3 +374,95 @@ class Player(Entity, TargetableByAuras):
 			card = self.card(card, zone=Zone.PLAY)
 		self.game.cheat_action(self, [Summon(self, card)])
 		return card
+
+	## death_log
+	def add_death_log(self, card):
+		self._death_log.append([card,card.game.turn])
+		self.died_this_turn.append(card)
+	@property
+	def death_log(self):
+		_ret = []
+		for _log in self._death_log:
+			_ret.append(_log[0])
+		return _ret
+
+
+	##play_log
+	def add_play_log(self, card):
+		self._play_log.append(PlayLog(card, card.game.turn))
+	@property
+	def play_log(self):
+		_ret = []
+		for _log in self._play_log:
+			_ret.append(_log.card)
+		return _ret
+	@property
+	def play_log_of_last_turn(self):
+		_ret = []
+		for _log in self._play_log:
+			if _log.turn == self.game.turn - 2:
+				_ret.append(_log.card)
+		return _ret
+	@property
+	def play_this_turn(self):
+		_ret = []
+		for _log in self._play_log:
+			if _log.turn == self.game.turn:
+				_ret.append(_log.card)
+		return _ret
+
+	##activate_log
+	def add_activate_log(self, card, amount):
+		self._activate_log.append(PlayLog(card,card.game.turn,amount))
+	@property
+	def activate_log(self):
+		_ret = []
+		for _log in self._activate_log:
+			_ret.append(_log.card)
+		return _ret
+
+	##damage_log
+	def add_damage_log(self, card, amount):
+		self._damage_log.append(PlayLog(card, card.game.turn, amount))
+	@property
+	def damage_log(self):
+		_ret = []
+		for _log in self._damage_log:
+			_ret.append(_log.card)
+		return _ret
+	@property
+	def damage_log_of_this_turn(self):
+		_ret = []
+		for _log in self._damage_log:
+			if _log.turn == self.game.turn:
+				_ret.append(_log.card)
+		return _ret
+
+	##sammon_log
+	def add_summon_log(self, card):
+		self._summon_log.append(PlayLog(card, card.game.turn))
+	@property
+	def summon_log(self):
+		_ret = []
+		for _log in self._summon_log:
+			_ret.append(_log.card)
+		return _ret
+
+	##reveal_log
+	def add_reveal_log(self, card):
+		self._reveal_log.append(PlayLog(card, card.game.turn))
+	@property
+	def reveal_log(self):
+		_ret = []
+		for _log in self._reveal_log:
+			_ret.append(_log.card)
+		return _ret
+
+	##targetedaction_log
+	def add_targetedaction_log(self, action):
+		self._targetedaction_log.append(action)
+	@property
+	def targetedaction_log(self):
+		return self._targetedaction_log
+
+	### d

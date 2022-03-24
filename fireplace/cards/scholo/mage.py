@@ -14,7 +14,7 @@ class SCH_235:#OK
 	"""Devolving Missiles	Epic"""
 	#[x]Shoot three missiles at random enemy minions that transform them into ones that cost (1) less.
 	requirements = {PlayReq.REQ_MINIMUM_ENEMY_MINIONS: 0}
-	play = Evolve(ENEMY_MINIONS, -1) * 3
+	play = Evolve(RANDOM_ENEMY_MINION, -1) * 3
 
 class SCH_310:#OK
 	"""Lab Partner	Common"""
@@ -73,11 +73,13 @@ class SCH_351:#OK
 		enchantments=["SCH_351e","SCH_351e2"]
 		random.shuffle(enchantments)
 		cards = Summon(CONTROLLER, RandomMinion(cost=5)).trigger(self)
-		card1=cards[0][0]
-		Buff(card1, enchantments[0]).trigger(self)
-		cards = Summon(CONTROLLER, RandomMinion(cost=5)).trigger(self)
-		card2=cards[0][0]
-		Buff(card2, enchantments[1]).trigger(self)
+		if cards[0] != []:
+			card1=cards[0][0]
+			Buff(card1, enchantments[0]).trigger(self)
+			cards = Summon(CONTROLLER, RandomMinion(cost=5)).trigger(self)
+			if cards[0] != []:
+				card2=cards[0][0]
+				Buff(card2, enchantments[1]).trigger(self)
 	pass
 class SCH_351a:
 	"""This is an Illusion."""

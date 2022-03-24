@@ -5,13 +5,16 @@ from itertools import chain
 
 from hearthstone.enums import BlockType, CardType, PlayState, State, Step, Zone
 
-from .actions import Attack, Awaken, BeginTurn, Death, EndTurn, EventListener, Play,Destroy, Give
+from .actions import Attack, Awaken, BeginTurn, Death, EndTurn, EventListener, \
+	Play,Destroy, Give, Draw, Shuffle, PayCost, Discover, Buff
 from .card import THE_COIN
 from .entity import Entity
 from .exceptions import GameOver
 from .managers import GameManager
-from .utils import CardList
-from .config import Config #by AharaLab
+from .utils import CardList,ActionType
+from .config import Config 
+from .dsl.random_picker import *
+
 
 
 class BaseGame(Entity):
@@ -34,6 +37,12 @@ class BaseGame(Entity):
 		self.active_aura_buffs = CardList()
 		self.setaside = CardList()
 		self._action_stack = 0
+		self._myLog_=[]
+		self.event_args=None
+		self.zone=Zone.INVALID
+		#self._stage_choice_=random.choice([## stage choice for SCH_199, 'SCH_199t23' is excluded.
+		#	'SCH_199t','SCH_199t2','SCH_199t3','SCH_199t4','SCH_199t19','SCH_199t20',
+		#	'SCH_199t21','SCH_199t22','SCH_199t25','SCH_199t26'])
 
 	def __repr__(self):
 		return "%s(players=%r)" % (self.__class__.__name__, self.players)
@@ -78,6 +87,10 @@ class BaseGame(Entity):
 		return CardList(chain(self.players[0].live_entities, self.players[1].live_entities))
 
 	@property
+	def allcards(self):
+		return self.entities + self.hands + self.decks
+
+	@property
 	def minions_killed_this_turn(self):
 		return self.players[0].minions_killed_this_turn + self.players[1].minions_killed_this_turn
 
@@ -94,14 +107,15 @@ class BaseGame(Entity):
 		self.manager.action_end(type, source)
 
 		if self.ended:
-			raise GameOver("The game has ended.")
-
+			#raise GameOver("The game has ended.")
+			return
 		if type != BlockType.PLAY:
 			self._action_stack -= 1
 		if not self._action_stack:
 			self.log("Empty stack, refreshing auras and processing deaths")
 			if type ==BlockType.DEATHS:
 				self.log("this case.")
+				return## avoid infinte loop
 			self.refresh_auras()
 			self.process_deaths()
 
@@ -135,6 +149,23 @@ class BaseGame(Entity):
 		player = card.controller
 		actions = [Play(card, target, index, choose)]
 		return self.action_block(player, actions, type, index, target)
+
+	def trade_card(self,card, option):
+		type = ActionType.TRADE
+		trader = card.controller
+		if option == 0:
+			actions = [PayCost(trader, card, 1), Draw(trader), Shuffle(trader,card)]
+		else: #option=1
+			actions = [PayCost(trader, card, 1), Discover(trader,RandomCard()), Shuffle(trader,card)]
+		## callback
+		if card.id == 'DED_009' and len(card.controller.field)>0:
+			actions += [Buff(random.choice(card.controller.field),'EX1_084e')]#rush
+		if card.id == 'DED_527':
+			actions += [Buff(card, 'DED_527e')]
+		#if hasattr(card.data.scripts, 'trade'):
+		#	self.log ("After trading, %s is triggered by %s"%(card.get_actions('trade'),card.controller))
+		#	#actions += [card.get_actions('trade')]
+		return self.action_block(trader, actions, type, None, None)
 
 	def process_deaths(self):
 		type = BlockType.DEATHS
@@ -250,6 +281,8 @@ class BaseGame(Entity):
 
 		buffs_to_destroy = []
 		for buff in self.active_aura_buffs:
+			if isinstance(buff, list):
+				buff=buff[0]
 			if buff.tick < self.tick:
 				buffs_to_destroy.append(buff)
 		for buff in buffs_to_destroy:
@@ -318,9 +351,61 @@ class BaseGame(Entity):
 		self.manager.turn(player)
 		return ret
 
+	def card_when_drawn(self, drawn_card, player):
+		from .card import Minion
+		from fireplace import cards
+		# if drawn_card is 'casts_when_drawn' then immediately play.  
+		if hasattr(drawn_card, "casts_when_drawn"):
+			self.queue_actions(player, [Play(drawn_card, None, None, None)])
+			self.queue_actions(player, [Draw(player)])
+		#When you draw this, add a _copy of it to your hand
+		if drawn_card.id == 'SW_306':
+			new_card = Minion(cards.db[drawn_card.id])
+			new_card.controller = player
+			new_card.zone = Zone.HAND
+		# if 'BAR_034' is in hand and mana >=5 then change 'BAR_034' to 'BAR_034t'
+		# if 'BAR_034t' is in hand and mana >=10 then change 'BAR_034t' to 'BAR_034t2'
+		for card in player.hand:
+			if card.id == 'BAR_034' and player.mana>=5:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_034t')])
+			if card.id == 'BAR_034t' and player.mana>=10:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_034t2')])
+		for card in player.hand:
+			if card.id == 'BAR_305' and player.mana>=5:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_305t')])
+			if card.id == 'BAR_305t' and player.mana>=10:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_305t2')])
+		for card in player.hand:
+			if card.id == 'BAR_536' and player.mana>=5:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_536t')])
+			if card.id == 'BAR_536t' and player.mana>=10:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_536t2')])
+		for card in player.hand:##Conditioning
+			if card.id == 'BAR_842' and player.mana>=5:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_842t')])
+			if card.id == 'BAR_842t' and player.mana>=10:
+				self.queue_actions(player,[Destroy(card)])
+				self.queue_actions(player,[Give(player, 'BAR_842t2')])
+
+
+
 	def _begin_turn(self, player):
 		self.manager.step(self.next_step, Step.MAIN_START)
 		self.manager.step(self.next_step, Step.MAIN_ACTION)
+
+		####################
+		if player.hero in player.field:
+			print ("hero is on the field!! lol")
+			player.field.remove(player.hero)
+			player.hero.zone = Zone.PLAY
+		####################
 
 		for p in self.players:
 			p.cards_drawn_this_turn = 0
@@ -345,28 +430,23 @@ class BaseGame(Entity):
 			character.num_attacks = 0
 
 		for minion in player.field:
-			if minion.dormant:
+			if hasattr(minion,'dormant') and minion.dormant:
 				minion.dormant -= 1
 				self.log("while dormant (%d) of %r"%(minion.dormant, minion))
 				if not minion.dormant:
 					self.queue_actions(self, [Awaken(minion)])
 
 		drawn_card = player.draw()
-		# if drawn_card is 'casts_when_drawn' then immediately play.  by aharalab  19.12.2020
-		if hasattr(drawn_card, "casts_when_drawn"):
-			self.queue_actions(player, [Play(drawn_card, None, None, None)])
-		# if 'BAR_034' is in hand and mana >=5 then change 'BAR_034' to 'BAR_034t'
-		# if 'BAR_034t' is in hand and mana >=10 then change 'BAR_034t' to 'BAR_034t2'
-		for card in player.hand:
-			if card.id == 'BAR_034' and player.mana>=5:
-				self.queue_actions(player,[Destroy(card)])
-				self.queue_actions(player,[Give(player, 'BAR_034t')])
-			if card.id == 'BAR_034t' and player.mana>=10:
-				self.queue_actions(player,[Destroy(card)])
-				self.queue_actions(player,[Give(player, 'BAR_034t2')])
 
 		self.manager.step(self.next_step, Step.MAIN_END)
+	pass
 
+	def add_log(self, choice):
+		self._myLog_.append(choice)
+		pass
+
+	def get_log(self):
+		return self._myLog_
 
 class CoinRules:
 	"""
@@ -407,6 +487,7 @@ class MulliganRules:
 
 	def mulligan_done(self):
 		self.begin_turn(self.player1)
+
 
 
 class Game(MulliganRules, CoinRules, BaseGame):

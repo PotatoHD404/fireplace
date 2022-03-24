@@ -11,7 +11,7 @@ class SCH_524:#OK
 	Give a damaged minion +3 Attack and <b>Divine Shield</b>."""
 	requirements = {PlayReq.REQ_TARGET_TO_PLAY:0, PlayReq.REQ_DAMAGED_TARGET:0 }
 	play = Buff(TARGET, "SCH_524e"),SetTag(TARGET, (GameTag.DIVINE_SHIELD,))
-SCH_524e = buff(3,0)
+SCH_524e = buff(3,0)## neutral
 class SCH_250:#OK
 	"""Wave of Apathy		1	-	-	Spell	Common	-	-	
 	Set the Attack of all enemy minions to 1 until your next turn."""
@@ -72,9 +72,10 @@ class SCH_138:#OK
 	requirements = { PlayReq.REQ_TARGET_TO_PLAY:0, PlayReq.REQ_MINION_TARGET:0, }
 	play = Buff(TARGET, "SCH_138e"), Buff(TARGET, "SCH_138e2")
 SCH_138e = buff(8,8)
-class SCH_138e2:
-	update = SetCannotAttackHeroesTag(OWNER,1)
-	events = OWN_TURN_END.on(SetCannotAttackHeroesTag(OWNER,0), Destroy(SELF))
+SCH_138e2 = buff(cannot_attack_heroes=True)#TAG_ONE_TURN_EFFECT
+#class SCH_138e2:
+#	update = SetCannotAttackHeroesTag(OWNER,1)
+#	events = OWN_TURN_END.on(SetCannotAttackHeroesTag(OWNER,0), Destroy(SELF))
 class SCH_139:#OK
 	"""Devout Pupil		6	4	5	Minion	Epic	-	Divine Shield	
 	[x]<b>Divine Shield, Taunt</b>

@@ -2,7 +2,7 @@ import random
 from itertools import chain
 
 from hearthstone.enums import CardType, MultiClassGroup, PlayReq, PlayState, \
-	Race, Rarity, Step, Zone
+	Race, Rarity, Step, Zone, GameTag, SpellSchool
 
 from . import actions, cards, enums, rules
 from .aura import TargetableByAuras
@@ -10,8 +10,8 @@ from .entity import BaseEntity, Entity, boolean_property, int_property, slot_pro
 from .exceptions import InvalidAction
 from .managers import CardManager
 from .targeting import TARGETING_PREREQUISITES, is_valid_target
-from .utils import CardList
-
+from .utils import CardList 
+from .logging import log
 
 THE_COIN = "GAME_005"
 
@@ -28,8 +28,11 @@ def Card(id):
 	}[data.type]
 	if subclass is Spell and data.secret:
 		subclass = Secret
-	if subclass is Spell and data.sidequest:# aharalab
-		subclass = Sidequest# aharalab
+	if subclass is Spell:
+		if hasattr(data,'sidequest') and data.sidequest:
+			subclass = Sidequest# 
+		if hasattr(data,'questline') and data.questline:
+			subclass = Sidequest# 
 	return subclass(data)
 
 
@@ -49,8 +52,8 @@ class BaseCard(BaseEntity):
 		self.heropower_damage = 0
 		self._zone = Zone.INVALID
 		self.tags.update(data.tags)
-		self.frenzyFlag = 0;
-
+		self.frenzyFlag = 0
+		self.choiceText = 'Choose one.'
 
 	def __str__(self):
 		return self.data.name
@@ -94,7 +97,10 @@ class BaseCard(BaseEntity):
 		old = self.zone
 
 		if old == value:
-			self.logger.warning("%r attempted a same-zone move in %r", self, old)
+			if old==Zone.HAND and not self in self.controller.hand:
+				self.controller.hand.append(self)
+			elif old==Zone.HAND:
+				self.logger.warning("%r attempted a same-zone move in %r", self, old)
 			return
 
 		if old:
@@ -107,7 +113,7 @@ class BaseCard(BaseEntity):
 			Zone.SETASIDE: self.game.setaside,
 		}
 		if caches.get(old) is not None:
-			if self in caches[old]:# aharalab. 30.12.2020 ####### I dont see why we need this line .
+			if self in caches[old]:# 
 				caches[old].remove(self)
 		if caches.get(value) is not None:
 			if hasattr(self, "_summon_index") and self._summon_index is not None:
@@ -148,36 +154,54 @@ class BaseCard(BaseEntity):
 
 
 class PlayableCard(BaseCard, Entity, TargetableByAuras):
-	windfury = int_property("windfury")
+	cant_be_frozen = boolean_property("cant_be_frozen")# 
+	corrupt = boolean_property('corrupt')# darkmoon
+	corruptedcard = boolean_property('corruptedcard')#darkmoon
 	has_choose_one = boolean_property("has_choose_one")
-	playable_zone = Zone.HAND
+	honorable_kill = boolean_property("honorable_kill")
 	lifesteal = boolean_property("lifesteal")
-	cant_be_frozen = boolean_property("cant_be_frozen")# aharalab 
-	reborn = boolean_property("reborn")# aharalab 
-	mark_of_evil = boolean_property("mark_of_evil")# aharalab 
-	_tmp_list1_ = []# aharalab  SCH_717, DRG_086
-	_tmp_list2_ = []# aharalab  SCH_717, DRG_086
-	_tmp_int1_ = 0# aharalab  SCH_717, DRG_086
+	mark_of_evil = boolean_property("mark_of_evil")# 
+	piece_of_cthun=int_property("piece_of_cthun")#
+	playable_zone = Zone.HAND
+	reborn = boolean_property("reborn")# 
+	script_data_num_1 = int_property("script_data_num_1")
+	trade_cost = int_property("trade_cost")#stormwind
+	tradeable = boolean_property("tradeable")#stormwind
+	windfury = int_property("windfury")
+	sidequest_list0 = []# Sidequest
+	_sidequest_list1_ = []# Sidequest
+	_sidequest_list2_ = []# Sidequest
+	_sidequest_list3_ = []# Sidequest
+	_sidequest_counter_ = 0# Sidequest
+	_Asphyxia_ = 'alive' # SW_323 The Rat King
+	honorable_kill = True
+	honorably_killed = False ##
 
 	def __init__(self, data):
 		self.cant_play = False
+		self.choose_both = False
+		self.choose_cards = CardList()
 		self.entourage = CardList(data.entourage)
 		self.has_battlecry = False
 		self.has_combo = False
 		self.overload = 0
 		self.target = None
 		self.rarity = Rarity.INVALID
-		self.choose_cards = CardList()
 		self.morphed = None
 		self.upgrade_counter = 0
 		self.cast_on_friendly_characters = False
+		self.script_data_text_0=' '
+		self.script_data_text_1=' '
+		if hasattr(self, 'trade_cost') and self.trade_cost>0:## because of CardDefs's bug
+			self.tradeable = True## because of CardDefs's bug
 		super().__init__(data)
 
 	@property
 	def events(self):
 		if self.zone == Zone.HAND:
 			return self.data.scripts.Hand.events
-		if self.zone == Zone.DECK:## EX1_295 occurs an error
+		if self.zone == Zone.DECK:## EX1_295, SW_072 occurs an error
+			# in existing cards, there isn't one with Deck class.  However, rarely they come here.
 			return self.data.scripts.Deck.events
 		return self.base_events + self._events
 
@@ -231,7 +255,7 @@ class PlayableCard(BaseCard, Entity, TargetableByAuras):
 		if self.zone == Zone.HAND:
 			return self.controller.hand.index(self) + 1
 		return 0
-
+	
 	def _set_zone(self, zone):
 		old_zone = self.zone
 		super()._set_zone(zone)
@@ -261,9 +285,8 @@ class PlayableCard(BaseCard, Entity, TargetableByAuras):
 			self.log("%s draws %r", self.controller, self)
 			if self.zone != Zone.HAND:
 				self.zone = Zone.HAND
-			# if drawn_card is 'casts_when_drawn' then immediately play.  by aharalab  19.12.2020
-			if hasattr(self, "casts_when_drawn"):
-				self.game.queue_actions(self.controller, [Play(self, None, None, None)])
+			# if self is 'casts_when_drawn' then immediately play. 
+			self.game.card_when_drawn(self, self.controller)
 			self.controller.cards_drawn_this_turn += 1
 
 			if self.game.step > Step.BEGIN_MULLIGAN:
@@ -324,7 +347,11 @@ class PlayableCard(BaseCard, Entity, TargetableByAuras):
 		"""
 		if choose:
 			if self.must_choose_one:
-				choose = card = self.choose_cards.filter(id=choose)[0]
+				for card in self.choose_cards:
+					if card.id==choose.id:
+						choose=card
+						break
+				#choose = card = self.choose_cards.filter(id=choose)[0]
 				self.log("%r: choosing %r", self, choose)
 			else:
 				raise InvalidAction("%r cannot be played with choice %r" % (self, choose))
@@ -392,9 +419,9 @@ class PlayableCard(BaseCard, Entity, TargetableByAuras):
 				return True
 		if PlayReq.REQ_TARGET_IF_AVAILABLE in self.requirements:
 			return bool(self.play_targets)
-		if PlayReq.REQ_TARGET_IF_AVAILABLE_AND_DRAGON_IN_HAND in self.requirements:
-			if self.controller.hand.filter(race=Race.DRAGON):
-				return bool(self.play_targets)
+		#if PlayReq.REQ_TARGET_IF_AVAILABLE_AND_DRAGON_IN_HAND in self.requirements:
+		#	if self.controller.hand.filter(race=Race.DRAGON):
+		#		return bool(self.play_targets)
 		req = self.requirements.get(PlayReq.REQ_TARGET_IF_AVAILABLE_AND_MINIMUM_FRIENDLY_MINIONS)
 		if req is not None:
 			if len(self.controller.field) >= req:
@@ -417,12 +444,42 @@ class PlayableCard(BaseCard, Entity, TargetableByAuras):
 	def targets(self):
 		return self.play_targets
 
+	def can_trade(self,option=0):
+		if not self.trade_cost > 0:
+			return (False,0)
+		for _card in (self.controller.hand + self.controller.field):
+			if _card.id=='SW_045':
+				option=1#Discover type trading
+		if option==0:
+			if self.trade_cost > self.controller.mana:
+				log.info("controller of %r doesn't have enough manas." % (self))
+				return (False, option)
+			if len(self.controller.deck)==0:
+				log.info("No card in the deck and %r cannot be trade." % (self))
+				return (False, option)
+			else :
+				return (True, option)
+		else:# option==1
+			if self.trade_cost > self.controller.mana:
+				log.info("controller of %r doesn't have enough manas." % (self))
+				return (False, option)
+			if len(self.controller.deck)<3:
+				log.info("No enough cards in the deck to trade %r." % (self))
+				return (False, option)
+			else :
+				return (True, option)
+
+
+	def trade(self,option=0):
+		self.game.trade_card(self, option)
+		pass
+
 
 class LiveEntity(PlayableCard, Entity):
 	has_deathrattle = boolean_property("has_deathrattle")
 	atk = int_property("atk")
 	cant_be_damaged = boolean_property("cant_be_damaged")
-	immune_while_attacking = slot_property("immune_while_attacking")
+	immune_while_attacking = boolean_property("immune_while_attacking")
 	incoming_damage_multiplier = int_property("incoming_damage_multiplier")
 	max_health = int_property("max_health")
 
@@ -500,16 +557,17 @@ class Character(LiveEntity):
 	cant_be_targeted_by_abilities = boolean_property("cant_be_targeted_by_abilities")
 	cant_be_targeted_by_hero_powers = boolean_property("cant_be_targeted_by_hero_powers")
 	heavily_armored = boolean_property("heavily_armored")
+	ignore_taunt = boolean_property("ignore_taunt")
 	min_health = boolean_property("min_health")
+	poisonous = boolean_property("poisonous")
 	rush = boolean_property("rush")
 	taunt = boolean_property("taunt")
-	poisonous = boolean_property("poisonous")
-	ignore_taunt = boolean_property("ignore_taunt")
+	divine_shield = boolean_property("divine_shield")
+	cannot_attack_heroes = boolean_property("cannot_attack_heroes")
 
 	def __init__(self, data):
-		self.frozen = False
 		self.attack_target = None
-		self.cannot_attack_heroes = False
+		self.frozen = False
 		self.num_attacks = 0
 		self.race = Race.INVALID
 		super().__init__(data)
@@ -605,6 +663,7 @@ class Hero(Character):
 	def __init__(self, data):
 		self.armor = 0
 		self.power = None
+		self.tatal_armor = 0
 		super().__init__(data)
 
 	@property
@@ -647,7 +706,13 @@ class Hero(Character):
 
 	def _set_zone(self, value):
 		if value == Zone.PLAY:
+			old_hero = self.controller.hero
 			self.controller.hero = self
+			# if there is an former hero copy hero's health
+			if old_hero:
+				self.max_health=old_hero.max_health
+				self.damage = old_hero.damage 
+				old_hero.zone = Zone.GRAVEYARD
 			if self.data.hero_power:
 				self.controller.summon(self.data.hero_power)
 		elif value == Zone.GRAVEYARD:
@@ -678,16 +743,18 @@ class Minion(Character):
 		"always_wins_brawls", "aura", "cant_attack", "cant_be_targeted_by_abilities",
 		"cant_be_targeted_by_hero_powers", "charge", "divine_shield", "enrage",
 		"forgetful", "frozen", "has_deathrattle", "has_inspire", "poisonous",
-		"stealthed", "taunt", "windfury", "cannot_attack_heroes", "rush"
+		"stealthed", "taunt", "windfury", "cannot_attack_heroes", "rush", "frenzy", "honorable_kill",
 	)
 
 	def __init__(self, data):
 		self.always_wins_brawls = False
-		self.divine_shield = False
 		self.enrage = False
 		self.silenced = False
 		self._summon_index = None
 		self.dormant = data.dormant
+		self.guardians_legacy = False
+		self.spellpower_fire = 0
+		self.deathrattle_valid = True
 		super().__init__(data)
 
 	@property
@@ -731,6 +798,10 @@ class Minion(Character):
 		return self.enrage and self.damage
 
 	@property
+	def frenzied(self):
+		return self.frenzy and self.damage and self.frenzyFlag==0
+
+	@property
 	def update_scripts(self):
 		yield from super().update_scripts
 		if self.enraged:
@@ -743,34 +814,44 @@ class Minion(Character):
 		return super().zone_position
 
 	def _set_zone(self, value):
-		if value == Zone.PLAY:
+		if value == Zone.PLAY:## hand -> play, or deck -> play, or setaside -> play
 			if self._summon_index is not None:
 				self.controller.field.insert(self._summon_index, self)
 			else:
 				self.controller.field.append(self)
-		elif value == Zone.GRAVEYARD and self.zone == Zone.PLAY:
-			self.controller.minions_killed_this_turn += 1
-
-		if self.zone == Zone.PLAY:
-			self.log("%r is removed from the field", self)
-			self.controller.field.remove(self)
-			if self.damage:
-				self.damage = 0
-		## これは必要か？ 14/8/21
-		if value == Zone.GRAVEYARD and self.zone == Zone.GRAVEYARD and self in self.controller.game.live_entities:
-			self.log("%s must be removed from the field but still left in the list of living entities.", self.data.name)
-			
-			if self in self.controller.live_entities:
-				player=self.controller
-			elif self in self.controller.opponent.live_entities:
-				player=self.controller.opponent
-			self.log("Controller is %s"%(player.name))
-			for entity in player.field:
-				self.log("%s - %s %s"%(entity.data.name, entity._to_be_destroyed, entity.to_be_destroyed))
-			if self in player.field:
-				player.field.remove(self)
-		##いちおう、無限ループ対策で、ここでカードの消去を行っておく。
-
+		elif value == Zone.GRAVEYARD: ## -> graveyard  
+			if self.zone == Zone.PLAY: ## play -> graveyard
+				self.controller.minions_killed_this_turn += 1
+				self.log("%r is removed from the field", self)
+				self.controller.field.remove(self)
+				if self.damage:
+					self.damage = 0
+			elif self.zone == Zone.HAND:
+				pass
+			elif self.zone == Zone.SETASIDE:
+				pass
+			elif self.zone == Zone.GRAVEYARD:## graveyard -> graveyard ## killed twice
+				if self in self.controller.game.live_entities:
+					self.log("%s must be removed from the field but still left in the list of living entities."%(self.data.name))
+					if self in self.controller.live_entities:
+						player=self.controller
+					elif self in self.controller.opponent.live_entities:
+						player=self.controller.opponent
+					self.log("Controller is %s"%(player.name))
+					if self in player.field:
+						#for entity in player.field:
+						#	print("field : %s = to_be_destroyed:%s"%(entity.data.name, entity.to_be_destroyed))
+						player.field.remove(self)
+					elif self in player.hand:
+						#for entity in player.hand:
+						#	print("hand  : %s = to_be_destroyed:%s"%(entity.data.name, entity.to_be_destroyed))
+						player.hand.remove(self)
+					elif self in player.game.setaside:
+						#for entity in player.game.setaside:
+						#	print("hand  : %s = to_be_destroyed:%s"%(entity.data.name, entity.to_be_destroyed))
+						player.game.setaside.remove(self)
+					else:
+						self.log("Extra-ordinary error happens.  Stop here in set_zone()")
 		super()._set_zone(value)
 
 	def _hit(self, amount):
@@ -807,7 +888,8 @@ class Minion(Character):
 
 
 class Spell(PlayableCard):
-	spell_school = int_property("spell_school") ## aharalab 16.8.2021
+	spell_school = int_property("spell_school") #
+	freeze = boolean_property('freeze') #
 
 	def __init__(self, data):
 		self.immune_to_spellpower = False
@@ -817,17 +899,20 @@ class Spell(PlayableCard):
 	def get_damage(self, amount, target):
 		amount = super().get_damage(amount, target)
 		if not self.immune_to_spellpower:
-			amount = self.controller.get_spell_damage(amount)
+			if self.spell_school==SpellSchool.FIRE:
+				amount = self.controller.get_spell_damage_fire(amount)
+			else:
+				amount = self.controller.get_spell_damage(amount)
 		if self.receives_double_spelldamage_bonus:
 			amount *= 2
 		return amount
 
 	def play(self, target=None, index=None, choose=None):
 		self.controller.times_spell_played_this_game += 1
-		self.controller.times_spells_played_this_turn += 1 ##### aharalab ####### 27.12.2020 ####
-		self.controller.spells_played_this_turn.append(self) ##### aharalab ####DAL_558### 28.12.2020 ####
-		if target!=None and target.controller==self.controller: ##### aharalab ####### 24.12.2020 ####
-			self.controller.times_spell_to_friendly_minion_this_game += 1 ##### aharalab ####### 24.12.2020 ####
+		self.controller.times_spells_played_this_turn += 1 #
+		self.controller.spells_played_this_turn.append(self) #
+		if target!=None and target.controller==self.controller: #
+			self.controller.times_spell_to_friendly_minion_this_game += 1 #
 		return super().play(target, index, choose)
 
 
@@ -859,7 +944,7 @@ class Secret(Spell):
 				if 'DAL_573'==card.id :# aharalab 
 					self.secret_twice=True #  
 		if self.zone == Zone.SECRET:
-			if self.secret_twice:# aharalab 
+			if hasattr(self,'secret_twice') and self.secret_twice:# aharalab 
 				self.secret_twice=False
 				return
 			else:
@@ -886,7 +971,6 @@ class Enchantment(BaseCard):
 	incoming_damage_multiplier = int_property("incoming_damage_multiplier")
 	max_health = int_property("max_health")
 	spellpower = int_property("spellpower")
-
 	buffs = []
 	slots = []
 
@@ -918,7 +1002,7 @@ class Enchantment(BaseCard):
 		elif zone == Zone.REMOVEDFROMGAME:
 			if self.zone == zone:
 				# Can happen if a Destroy is queued after a bounce, for example
-				self.logger.warning("Trying to remove %r which is already gone", self)
+				self.log("Trying to remove %r which is already gone", self)
 				return
 			self.owner.buffs.remove(self)
 			if self in self.game.active_aura_buffs:
@@ -934,6 +1018,9 @@ class Enchantment(BaseCard):
 			self.log("%r removes all damage from %r", self, target)
 			target.damage = 0
 		self.zone = Zone.PLAY
+		if self.id == 'YOP_012e':
+			if hasattr(self.owner,'deathrattle_valid'):
+				self.owner.deathrattle_valid = False
 
 	def remove(self):
 		self.zone = Zone.REMOVEDFROMGAME
@@ -1035,11 +1122,8 @@ class HeroPower(PlayableCard):
 			return False
 		return super().is_playable()
 
-
-	############ aharalab ################
-
 class Sidequest(Spell):
-	_tmp_int1_=0
+	_sidequest_counter_=0
 	@property
 	def events(self):
 		ret = super().events

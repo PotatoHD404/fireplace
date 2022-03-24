@@ -1,5 +1,10 @@
 from ..utils import *
 
+# 未実装
+# 'BT_113e',
+# 'BT_187e','BT_187e2','BT_196e',
+# 'BT_302e','BT_309e','BT_711e',
+
 class BT_724:#OK
 	"""Ethereal Augmerchant	Minion	Common
 	<b>Battlecry:</b> Deal 1 damage to a minion and give it <b>Spell Damage +1</b>."""
@@ -7,6 +12,8 @@ class BT_724:#OK
 		PlayReq.REQ_MINION_TARGET: 0,
 		PlayReq.REQ_TARGET_IF_AVAILABLE: 0} 
 	play = Hit(TARGET, 1), SetTag(TARGET, (GameTag.SPELLPOWER,))
+class BT_724e:
+	pass
 class BT_722:#OK
 	"""Guardian Augmerchant	Minion	Common
 	<b>Battlecry:</b> Deal 1 damage to a minion and give it <b>Divine Shield</b>."""
@@ -35,7 +42,7 @@ class BT_715:#OK
 	Whenever this minion takes
 	_damage, gain +2 Attack."""
 	events = Attack(ALL_CHARACTERS,SELF).on(Buff(SELF,"BT_715e"))
-BT_715e = buff(2,0)
+BT_715e = buff(2,0)## -> BT_730
 class BT_156:#OK
 	"""Imprisoned Vilefiend	Minion	Common
 	<b>Dormant</b> for 2 turns.
@@ -67,12 +74,22 @@ class BT_714:#OK
 	requirements = {PlayReq.REQ_ENEMY_TARGET: 0, PlayReq.REQ_TARGET_TO_PLAY: 0}
 	#play = SetTag(TARGET,(GameTag.FROZEN, ))
 	play = Freeze(TARGET)
-class BT_730:#######################################################################
+class DestroyBuff(TargetedAction):
+	TARGET = ActionArg()
+	BUFF = ActionArg()
+	def do(self, source, target, buff):
+		for card in source.buffs:
+			if card.id==buff:
+				source.buffs.remove(card)
+				card.zone=Zone.GRAVEYARD
+		pass
+class BT_730:###とりあえず
 	"""Overconfident Orc	Minion	Common
 	<b>Taunt</b>
 	While at full Health,
 	this has +2 Attack."""
-	#events = -Damage(SELF).on()
+	play = Buff(SELF,'BT_715e')
+	events = Damage(SELF).on(DestroyBuff(SELF,'BT_715e'))
 class BT_126:#OK
 	"""Teron Gorefiend	Minion	Legendary
 	[x]<b>Battlecry:</b> Destroy all
@@ -82,7 +99,7 @@ class BT_126:#OK
 	play = BT126TeronGorefiend(SELF)
 	deathrattle = BT126TeronGorefiendDeathrattle(SELF)
 	#deathrattle = Buff(Summon(CONTROLLER, Copy(Destroy.TARGET)),"BT_126e2")
-#BT_126e = buff(0,0)
+BT_126e = buff(0,0)
 #"""Shadowy Construct"""
 BT_126e2 = buff(1,1)
 class BT_159:#OK
@@ -118,9 +135,9 @@ class BT_850:#OK
 	When they die, destroy all
 	minions and awaken."""
 	dormant = -1 #infinite dormant
-	play = Buff(SELF, "BT_850e"), Summon(OPPONENT, "BT_850t") * 3
+	play = Summon(OPPONENT, "BT_850t") * 3
+	events = Death(ENEMY+ID("BT_850t")).on(SidequestCounter(SELF,3,[Destroy(ALL_MINIONS - SELF), SetAttr(SELF, 'dormant',0), Awaken(SELF) ]))
 class BT_850e:
-	events = Death(ENEMY+ID("BT_850t")).on(SidequestCounter(OWNER,3,[Destroy(ALL_MINIONS - OWNER), SetAttr(OWNER, 'dormant',0), Awaken(OWNER),Destroy(SELF)]))
 	pass
 class BT_850t:
 	""" Hellfire Warder """
@@ -131,7 +148,7 @@ class BT_737:#OK
 	It goes <b>Dormant</b> for 2 turns."""
 	requirements = {PlayReq.REQ_TARGET_TO_PLAY: 0, PlayReq.REQ_MINION_TARGET: 0, PlayReq.REQ_ENEMY_TARGET:0}
 	play = Dormant(TARGET, 2)
-#BT_737e = buff(dormant=2)
+BT_737e = buff(dormant=2)#un-used
 class BT_190:#OK
 	"""Replicat-o-tron	Minion	Epic
 	At the end of your turn, transform a neighbor into a copy of this."""
