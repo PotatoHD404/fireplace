@@ -5,15 +5,18 @@ fireplace.egg-info
 *.pyc
 .tox
 .vscode
+.idea
 .env
 .coverage
+.idea
 
 .DS_Store
-
-fireplace2.egg-info/
 build/
 /.pytest_cache/
 /.venv/
+/.idea/
+/.benchmarks/
+/local/
 
 
 
@@ -128,3 +131,7 @@ fabric.properties
 .idea/codestream.xml
 
 # End of https://www.toptal.com/developers/gitignore/api/pycharm
+
+fireplace2.egg-info/
+
+dist/

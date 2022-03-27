@@ -362,8 +362,8 @@ class KettleServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 def main():
     arguments = ArgumentParser(prog="kettle")
-    arguments.add_argument("hostname", default="127.0.0.1", nargs="?")
-    arguments.add_argument("port", type=int, default=9111, nargs="?")
+    arguments.add_argument("hostname", default="0.0.0.0", nargs="?")
+    arguments.add_argument("port", type=int, default=1119, nargs="?")
     args = arguments.parse_args(sys.argv[1:])
 
     cards.db.initialize()

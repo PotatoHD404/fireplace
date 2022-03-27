@@ -1,9 +1,10 @@
 import os
 from pkg_resources import resource_filename
 from hearthstone import cardxml
-from hearthstone.enums import CardType
+from hearthstone.enums import CardType,CardSet,CardClass
 from ..logging import log
 from ..utils import get_script_definition
+from hearthstone.enums import GameTag
 
 
 class CardDB(dict):
@@ -29,7 +30,7 @@ class CardDB(dict):
 
 		scriptnames = (
 			"activate", "combo", "deathrattle", "draw", "inspire", "play",
-			"enrage", "update", "powered_up", "outcast", "awaken"
+			"enrage", "update", "powered_up", "outcast", "awaken","trade", "honorable_kill",
 		)
 
 		for script in scriptnames:
@@ -54,9 +55,13 @@ class CardDB(dict):
 
 		if not hasattr(card.scripts, "Hand"):
 			card.scripts.Hand = type("Hand", (), {})
+		if not hasattr(card.scripts, "Deck"):
+			card.scripts.Deck = type("Deck", (), {})
 
 		if not hasattr(card.scripts.Hand, "events"):
 			card.scripts.Hand.events = []
+		if not hasattr(card.scripts.Deck, "events"):
+			card.scripts.Deck.events = []
 
 		if not hasattr(card.scripts.Hand.events, "__iter__"):
 			card.scripts.Hand.events = [card.scripts.Hand.events]
@@ -90,16 +95,32 @@ class CardDB(dict):
 		else:
 			card.dormant = 0
 
+
 		return card
 
-	def initialize(self, locale="enUS"):
-		log.info("Initializing card database")
+
+	def initialize(self, locale="jaJP"):#locale="enUS"):#
+		log.info("Load card database")
 		self.initialized = True
 		db, xml = cardxml.load(locale=locale)
-		for id, card in db.items():
-			self[id] = self.merge(id, card)
-
+		log.info("Initializing card database")
+		from .cardlist import All
+		for cardIDlist in All:
+			for id in cardIDlist:
+				card = db[id]
+				spellpowervalue = card.tags.get(GameTag.SPELLPOWER)
+				if spellpowervalue is not None:
+					setattr(card, 'spellpower', spellpowervalue)
+				else:
+					setattr(card, 'spellpower', 0)
+				if card.tags.get(GameTag.CHOOSE_ONE) is not None:
+					setattr(card, 'has_choose_one', True)
+				self[id] = self.merge(id, card)
+				#if card.multiple_classes and card.type==CardType.SPELL and card.card_class==CardClass.NEUTRAL:
+				#	print ("%s"%(id))
+				pass
 		log.info("Merged %i cards", len(self))
+
 
 	def filter(self, **kwargs):
 		"""
@@ -128,6 +149,8 @@ class CardDB(dict):
 
 				if attr == "card_class":
 					cards = [card for card in cards if value in card.classes]
+				elif attr == 'has_choose_one':
+					cards = [card for card in cards if hasattr(card,'has_choose_one')]
 				else:
 					cards = [
 						card for card in cards if (

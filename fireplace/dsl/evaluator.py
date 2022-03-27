@@ -74,8 +74,8 @@ class Attacking(Evaluator):
 		return "%s(%r %r)" % (self.__class__.__name__, self.selector1, self.selector2)
 
 	def check(self, source):
-		t1 = self.selector1.eval(source.game, source)
-		t2 = self.selector2.eval(source.game, source)
+		t1 = self.selector1.eval(source.game.entities, source)
+		t2 = self.selector2.eval(source.game.entities, source)
 		for entity in t1:
 			if entity.attacking:
 				return entity.attack_target in t2
@@ -85,15 +85,16 @@ class Attacking(Evaluator):
 class ChooseBoth(Evaluator):
 	"""
 	Evaluates to True if the selector `choose_both` is true
-	Selector must evaluate to only one player.
+	Selector must evalutae to only one player.
 	"""
 	def __init__(self, selector):
 		super().__init__()
 		self.selector = selector
 
 	def check(self, source):
-		player = self.selector.eval(source.game, source)[0]
-		if player.choose_both:
+		entity = self.selector.eval(source.game.entities, source)[0]
+		# entity may be Player or PlayableCard
+		if entity.choose_both:
 			return True
 		return False
 
@@ -108,7 +109,7 @@ class CurrentPlayer(Evaluator):
 		self.selector = selector
 
 	def check(self, source):
-		for target in self.selector.eval(source.game, source):
+		for target in self.selector.eval(source.game.entities, source):
 			if not target.controller.current_player:
 				return False
 		return True
@@ -123,7 +124,7 @@ class Dead(Evaluator):
 		self.selector = selector
 
 	def check(self, source):
-		for target in self.selector.eval(source.game, source):
+		for target in self.selector.eval(source.game.entities, source):
 			if not target.dead:
 				return False
 		return True
@@ -138,7 +139,7 @@ class Find(Evaluator):
 		self.selector = selector
 
 	def check(self, source):
-		return bool(len(self.selector.eval(source.game, source)))
+		return bool(len(self.selector.eval(source.game.allcards, source))) ### game? or game.entities?
 
 
 class FindDuplicates(Evaluator):
@@ -150,9 +151,8 @@ class FindDuplicates(Evaluator):
 		self.selector = selector
 
 	def check(self, source):
-		entities = self.selector.eval(source.game, source)
+		entities = self.selector.eval(source.game.allcards, source)
 		return len(set(entities)) < len(entities)
-
 
 class JoustEvaluator(Evaluator):
 	"""
@@ -190,7 +190,7 @@ class Lethal(Evaluator):
 		self.amount = amount
 
 	def check(self, source):
-		entities = self.selector.eval(source.game, source)
+		entities = self.selector.eval(source.game.entities, source)
 		amount = self.amount.evaluate(source)
 		for entity in entities:
 			health = entity.health
@@ -199,3 +199,17 @@ class Lethal(Evaluator):
 			if health > amount:
 				return False
 		return True
+
+class CostUp(Evaluator):
+	def __init__(self, selector, amount):
+		super().__init__()
+		self.selector = selector
+		self.amount = amount
+
+	def check(self, source, amount):
+		targets = self.selector.eval(source.game.entities, source)
+		for target in targets:
+			if hasattr(target, 'cost'):
+				if target>self.amount:
+					return True
+		return False
